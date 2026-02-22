@@ -1,12 +1,14 @@
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
-from datetime import date, timedelta, datetime
+from datetime import timedelta, datetime
+from pytz import timezone as pytz_timezone
+from pytz import UnknownTimeZoneError
 
 from fsm.states import AddTaskFSM, EditTaskFSM
 from keyboards.reply import main_kb, date_kb
 from keyboards.inline import task_inline_kb
-from db import add_task, get_tasks, get_today_tasks_full, update_task
+from db import add_task, get_tasks, get_today_tasks_full, update_task, get_user_timezone
 
 router = Router()
 
@@ -21,12 +23,23 @@ async def add_task_text(message: Message, state: FSMContext):
     await state.set_state(AddTaskFSM.date)
     await message.answer("📅 Выбери дату", reply_markup=date_kb)
 
+def _user_today(user_id: int):
+    """Дата «сегодня» в таймзоне пользователя."""
+    tz_name = get_user_timezone(user_id) or "Europe/Moscow"
+    try:
+        tz = pytz_timezone(tz_name)
+    except UnknownTimeZoneError:
+        tz = pytz_timezone("Europe/Moscow")
+    return datetime.now(tz).date()
+
+
 @router.message(AddTaskFSM.date)
 async def add_task_date(message: Message, state: FSMContext):
+    user_id = message.from_user.id
     if message.text == "Сегодня":
-        task_date = date.today()
+        task_date = _user_today(user_id)
     elif message.text == "Завтра":
-        task_date = date.today() + timedelta(days=1)
+        task_date = _user_today(user_id) + timedelta(days=1)
     elif message.text == "Ввести дату вручную":
         await message.answer("📅 Введите дату в формате ГГГГ-ММ-ДД (например 2025-12-31)")
         return
@@ -71,10 +84,11 @@ async def edit_task_text(message: Message, state: FSMContext):
 
 @router.message(EditTaskFSM.date)
 async def edit_task_date(message: Message, state: FSMContext):
+    user_id = message.from_user.id
     if message.text == "Сегодня":
-        task_date = date.today()
+        task_date = _user_today(user_id)
     elif message.text == "Завтра":
-        task_date = date.today() + timedelta(days=1)
+        task_date = _user_today(user_id) + timedelta(days=1)
     elif message.text == "Ввести дату вручную":
         await message.answer("📅 Введите дату в формате ГГГГ-ММ-ДД (например 2025-12-31)")
         return
@@ -113,16 +127,21 @@ async def edit_task_time(message: Message, state: FSMContext):
 
 @router.message(lambda m: m.text == "📝 Задачи на сегодня")
 async def today_tasks(message: Message):
-    tasks = get_today_tasks_full(message.from_user.id)
+    user_id = message.from_user.id
+    today_iso = _user_today(user_id).isoformat()
+    tasks = get_today_tasks_full(user_id, today_iso)
     if not tasks:
         await message.answer("📭 Сегодня задач нет")
         return
 
     for t in tasks:
+        done = bool(t["completed"])
+        prefix = "✅ Выполнена: " if done else ""
         await message.answer(
-            f"{t['text']} ⏰ {t['remind_time']}",
-            reply_markup=task_inline_kb(t["id"])
+            f"{prefix}{t['text']} ⏰ {t['remind_time']}",
+            reply_markup=task_inline_kb(t["id"], completed=done)
         )
+
 
 @router.message(lambda m: m.text == "📚 Все задачи")
 async def all_tasks(message: Message):
@@ -132,7 +151,9 @@ async def all_tasks(message: Message):
         return
 
     for t in tasks:
+        done = bool(t["completed"])
+        prefix = "✅ Выполнена: " if done else ""
         await message.answer(
-            f"{t['text']} ({t['task_date']} ⏰ {t['remind_time']})",
-            reply_markup=task_inline_kb(t["id"])
+            f"{prefix}{t['text']} ({t['task_date']} ⏰ {t['remind_time']})",
+            reply_markup=task_inline_kb(t["id"], completed=done)
         )

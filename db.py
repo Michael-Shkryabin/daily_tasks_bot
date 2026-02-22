@@ -109,10 +109,10 @@ def get_tasks(user_id):
         cursor.execute("SELECT * FROM tasks WHERE user_id=? ORDER BY task_date", (user_id,))
         return cursor.fetchall()
 
-def get_today_tasks_full(user_id):
-    today = date.today().isoformat()
+def get_today_tasks_full(user_id, today_iso):
+    """today_iso — дата «сегодня» в таймзоне пользователя (YYYY-MM-DD)."""
     with _db_lock:
-        cursor.execute("SELECT * FROM tasks WHERE user_id=? AND task_date=?", (user_id, today))
+        cursor.execute("SELECT * FROM tasks WHERE user_id=? AND task_date=?", (user_id, today_iso))
         return cursor.fetchall()
 
 def get_task_by_id(user_id, task_id):
