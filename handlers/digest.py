@@ -3,9 +3,9 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from datetime import datetime
 
-from fsm.states import DigestFSM
+from fsm.states import DigestFSM, TimezoneFSM
 from keyboards.reply import main_kb
-from db import set_digest_times, get_user_digest_times
+from db import set_digest_times, get_user_digest_times, get_user_timezone
 
 router = Router()
 
@@ -21,6 +21,16 @@ async def digest_start(message: Message, state: FSMContext):
 
 @router.message(DigestFSM.times)
 async def digest_save(message: Message, state: FSMContext):
+    # Кнопка «Таймзона» не должна парситься как время — переключаем на настройку таймзоны
+    if message.text and message.text.strip() == "🌍 Таймзона":
+        await state.clear()
+        tz = get_user_timezone(message.from_user.id) or "Europe/Moscow"
+        await state.set_state(TimezoneFSM.tz)
+        await message.answer(
+            f"🌍 Текущая: {tz}\nВведи новую таймзону (например Europe/Moscow, Asia/Tokyo)"
+        )
+        return
+
     raw = [t.strip() for t in message.text.split(",") if t.strip()]
     times = []
     for t in raw:
