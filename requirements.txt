@@ -1,0 +1,4 @@
+aiogram>=3.24
+APScheduler>=3.11
+python-dotenv>=1.2
+pytz>=2025.2
