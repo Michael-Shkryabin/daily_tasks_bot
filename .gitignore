@@ -5,3 +5,5 @@ venv/
 # Кэш Python
 __pycache__/
 *.pyc
+
+db.py
